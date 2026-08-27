@@ -2,6 +2,17 @@
 
 Base URL `http://localhost:8080`. All endpoints return JSON. Null fields are omitted.
 
+An OpenAPI 3 description of everything below is generated from the controllers and served
+by the running application:
+
+| | |
+|---|---|
+| Swagger UI | <http://localhost:8080/swagger-ui.html> |
+| OpenAPI document | <http://localhost:8080/v3/api-docs> |
+
+The generated document is the authority on request and response shapes — it cannot drift
+from the deployed code. This page stays the place for the reasoning behind them.
+
 > **No authentication.** The API is currently unauthenticated and must sit behind an
 > authenticating gateway before deployment. See [TASKS.md](TASKS.md).
 
@@ -195,7 +206,8 @@ number a supervisor uses to judge whether lanes are keeping up.
 | `CORS_ORIGINS` | `http://localhost:5173` | Allowed console origins |
 | `screening.risk.reject-threshold` | `70` | Score at or above which the verdict is REJECT |
 | `screening.risk.review-threshold` | `35` | Score at or above which the case is referred |
-| `screening.ocr.claude.enabled` | `true` | Vision OCR; inactive without a credential |
+| `screening.ocr.claude.enabled` | `true` | Vision OCR master switch; still inactive without a credential |
+| `screening.ocr.claude.api-key` | *(empty)* | Vision OCR credential. Falls back to `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` in the environment |
 | `screening.ocr.claude.effort` | `medium` | Reasoning effort for vision OCR |
 | `TESSERACT_BINARY` | `tesseract` | Classical OCR binary |
 | `FACE_SERVICE_URL` | *(empty)* | Biometric matcher; empty disables Module 4 |

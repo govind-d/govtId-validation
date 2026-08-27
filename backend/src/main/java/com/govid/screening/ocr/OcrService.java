@@ -54,11 +54,11 @@ public class OcrService {
     public OcrOutcome extract(OcrEngine.OcrRequest request) {
         long start = System.nanoTime();
 
-        Optional<OcrEngine> selected = engines.stream()
+        List<OcrEngine> candidates = engines.stream()
                 .filter(engine -> engine.isAvailable(request))
-                .findFirst();
+                .toList();
 
-        if (selected.isEmpty()) {
+        if (candidates.isEmpty()) {
             return new OcrOutcome(
                     ModuleResult.failed(ScreeningModule.OCR_EXTRACTION, elapsed(start),
                             "No OCR engine available. Install Tesseract, configure an Anthropic "
@@ -66,15 +66,31 @@ public class OcrService {
                     new ExtractedFields());
         }
 
-        OcrEngine engine = selected.get();
-        OcrEngine.OcrOutput output;
-        try {
-            output = engine.read(request);
-        } catch (Exception e) {
-            log.warn("OCR engine {} failed", engine.name(), e);
+        // Try each available engine in priority order rather than betting the module on the
+        // first one. An engine can be available and still fail - a revoked credential, an
+        // unreachable service, a binary that dies on one image - and when a working engine
+        // sits behind it, failing the whole module would discard a document the platform
+        // could actually have read.
+        OcrEngine engine = null;
+        OcrEngine.OcrOutput output = null;
+        List<String> attempts = new ArrayList<>();
+
+        for (OcrEngine candidate : candidates) {
+            try {
+                output = candidate.read(request);
+                engine = candidate;
+                break;
+            } catch (Exception e) {
+                log.warn("OCR engine {} failed; trying the next available engine",
+                        candidate.name(), e);
+                attempts.add(candidate.name() + ": " + rootMessage(e));
+            }
+        }
+
+        if (output == null) {
             return new OcrOutcome(
                     ModuleResult.failed(ScreeningModule.OCR_EXTRACTION, elapsed(start),
-                            "OCR engine " + engine.name() + " failed: " + e.getMessage()),
+                            "Every available OCR engine failed - " + String.join("; ", attempts)),
                     new ExtractedFields());
         }
 
@@ -87,6 +103,11 @@ public class OcrService {
         Map<String, Object> details = new LinkedHashMap<>(output.details());
         details.put("engine", engine.name());
         details.put("confidence", output.confidence());
+        if (!attempts.isEmpty()) {
+            // Recorded as a diagnostic, never as a risk flag. A failing engine is our
+            // infrastructure problem; it must not raise the score against the traveller.
+            details.put("failedEngines", List.copyOf(attempts));
+        }
 
         // Read the printed page on its own first. Captured before the MRZ is applied so
         // Module 2 can compare the two independent readings of the same document.
@@ -128,7 +149,11 @@ public class OcrService {
 
         return new OcrOutcome(
                 new ModuleResult(ScreeningModule.OCR_EXTRACTION, ModuleResult.Status.COMPLETED,
-                        elapsed(start), flags, details, "Read by " + engine.name()),
+                        elapsed(start), flags, details,
+                        attempts.isEmpty()
+                                ? "Read by " + engine.name()
+                                : "Read by " + engine.name() + " after "
+                                        + attempts.size() + " engine(s) failed"),
                 fields);
     }
 
@@ -162,6 +187,16 @@ public class OcrService {
         if (fields.getDateOfExpiry() != null) count++;
         if (fields.getSex() != null) count++;
         return count;
+    }
+
+    /** Innermost message of a failure chain, which is where the real cause usually sits. */
+    private static String rootMessage(Throwable error) {
+        Throwable current = error;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
+        return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
     }
 
     private static long elapsed(long startNanos) {

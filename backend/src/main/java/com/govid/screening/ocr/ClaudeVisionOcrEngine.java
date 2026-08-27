@@ -66,6 +66,7 @@ public class ClaudeVisionOcrEngine implements OcrEngine {
 
     private final ObjectMapper objectMapper;
     private final boolean configuredEnabled;
+    private final String configuredApiKey;
     private final OutputConfig.Effort effort;
 
     /** Built once on first use; {@code null} means no usable credential. */
@@ -75,9 +76,11 @@ public class ClaudeVisionOcrEngine implements OcrEngine {
     public ClaudeVisionOcrEngine(
             ObjectMapper objectMapper,
             @Value("${screening.ocr.claude.enabled:true}") boolean configuredEnabled,
+            @Value("${screening.ocr.claude.api-key:}") String configuredApiKey,
             @Value("${screening.ocr.claude.effort:medium}") String effort) {
         this.objectMapper = objectMapper;
         this.configuredEnabled = configuredEnabled;
+        this.configuredApiKey = configuredApiKey == null ? "" : configuredApiKey.trim();
         this.effort = switch (effort.toLowerCase()) {
             case "low" -> OutputConfig.Effort.LOW;
             case "high" -> OutputConfig.Effort.HIGH;
@@ -106,6 +109,12 @@ public class ClaudeVisionOcrEngine implements OcrEngine {
     /**
      * Lazily builds the SDK client. A missing credential is an expected configuration,
      * not an error, so it is logged once and the engine simply stays unavailable.
+     *
+     * <p>The credential is checked explicitly rather than by attempting to construct the
+     * client. {@code fromEnv()} succeeds with no credential present and returns a client
+     * that fails at request time with a 401 - which would make this engine claim
+     * availability it does not have, win engine selection, and take Module 1 down on a
+     * document a lower-priority engine could have read.
      */
     private AnthropicClient clientOrNull() {
         if (initialised) {
@@ -115,16 +124,36 @@ public class ClaudeVisionOcrEngine implements OcrEngine {
             if (initialised) {
                 return client;
             }
+            initialised = true;
             try {
-                client = AnthropicOkHttpClient.fromEnv();
-                log.info("Claude vision OCR engine active (model {})", MODEL);
+                if (!configuredApiKey.isBlank()) {
+                    client = AnthropicOkHttpClient.builder().apiKey(configuredApiKey).build();
+                    log.info("Claude vision OCR engine active (model {}, key from configuration)",
+                            MODEL);
+                } else if (hasCredentialInEnvironment()) {
+                    client = AnthropicOkHttpClient.fromEnv();
+                    log.info("Claude vision OCR engine active (model {}, key from environment)",
+                            MODEL);
+                } else {
+                    log.info("Claude vision OCR engine inactive: no Anthropic credential "
+                            + "configured (set ANTHROPIC_API_KEY or screening.ocr.claude.api-key)");
+                    client = null;
+                }
             } catch (RuntimeException e) {
-                log.info("Claude vision OCR engine inactive: no Anthropic credential configured");
+                log.warn("Claude vision OCR engine inactive: client could not be built", e);
                 client = null;
             }
-            initialised = true;
             return client;
         }
+    }
+
+    private static boolean hasCredentialInEnvironment() {
+        return isSet(System.getenv("ANTHROPIC_API_KEY"))
+                || isSet(System.getenv("ANTHROPIC_AUTH_TOKEN"));
+    }
+
+    private static boolean isSet(String value) {
+        return value != null && !value.isBlank();
     }
 
     @Override
