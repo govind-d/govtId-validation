@@ -1,0 +1,25 @@
+de:
+  flapdoodle:
+    mongodb:
+      embedded:
+        version: 7.0.14
+
+spring:
+  data:
+    mongodb:
+      # Overridden by the embedded server; the database name is what matters here.
+      database: govtid_screening_test
+      auto-index-creation: true
+
+screening:
+  ocr:
+    claude:
+      # Integration tests must never depend on an external service or a credential.
+      enabled: false
+  face:
+    service-url: ""
+
+logging:
+  level:
+    org.mongodb.driver: WARN
+    de.flapdoodle: WARN

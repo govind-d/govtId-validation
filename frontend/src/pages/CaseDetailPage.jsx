@@ -1,0 +1,295 @@
+import { useCallback, useEffect, useState } from 'react'
+import { useParams } from 'react-router-dom'
+import { getAudit, getCase, imageUrl, recordDecision } from '../api.js'
+import VerdictBanner from '../components/VerdictBanner.jsx'
+import FindingList from '../components/FindingList.jsx'
+import Badge from '../components/Badge.jsx'
+
+export default function CaseDetailPage() {
+  const { reference } = useParams()
+
+  const [screening, setScreening] = useState(null)
+  const [audit, setAudit] = useState([])
+  const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [notes, setNotes] = useState('')
+  const [officerId, setOfficerId] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [caseData, auditData] = await Promise.all([
+        getCase(reference),
+        getAudit(reference).catch(() => []),
+      ])
+      setScreening(caseData)
+      setAudit(auditData)
+      setOfficerId(caseData.officerId || '')
+      setNotes(caseData.officerNotes || '')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [reference])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  async function decide(decision) {
+    setSaving(true)
+    setError(null)
+    try {
+      await recordDecision(reference, { decision, officerId, notes })
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <div className="panel spinner">Loading case...</div>
+  if (error && !screening) return <div className="error">{error}</div>
+  if (!screening) return null
+
+  const extracted = screening.extracted
+  const heatmap = findHeatmap(screening)
+
+  return (
+    <>
+      <h1 className="page-title">Case {screening.caseReference}</h1>
+      <p className="page-subtitle">
+        {screening.documentType?.replace(/_/g, ' ')} presented at{' '}
+        {screening.checkpointId || 'an unrecorded checkpoint'}
+        {screening.laneId ? `, lane ${screening.laneId}` : ''} - screened in{' '}
+        {screening.processingMillis} ms
+      </p>
+
+      {error && <div className="error">{error}</div>}
+
+      <VerdictBanner risk={screening.risk} />
+
+      <div className="grid-2">
+        <div>
+          <div className="panel">
+            <h2>Extracted identity</h2>
+            <table className="field-table">
+              <tbody>
+                <Row label="Surname" value={extracted?.surname} />
+                <Row label="Given names" value={extracted?.givenNames} />
+                <Row label="Document number" value={extracted?.documentNumber} mono />
+                <Row label="Issuing state" value={extracted?.issuingState} />
+                <Row label="Nationality" value={extracted?.nationality} />
+                <Row label="Date of birth" value={extracted?.dateOfBirth} />
+                <Row label="Sex" value={extracted?.sex} />
+                <Row label="Date of expiry" value={extracted?.dateOfExpiry} />
+                <Row label="Visa number" value={extracted?.visaNumber} mono />
+                <Row label="Visa type" value={extracted?.visaType} />
+                <Row label="Entry type" value={extracted?.entryType} />
+                <Row label="Permitted stay (days)" value={extracted?.stayDurationDays} />
+                <Row label="Valid from" value={extracted?.validFrom} />
+                <Row label="Valid until" value={extracted?.validUntil} />
+                <Row label="MRZ format" value={extracted?.mrz?.format} />
+                <Row label="Read by" value={extracted?.engine} />
+                <Row
+                  label="OCR confidence"
+                  value={
+                    extracted?.ocrConfidence != null
+                      ? `${Math.round(extracted.ocrConfidence * 100)}%`
+                      : null
+                  }
+                />
+              </tbody>
+            </table>
+          </div>
+
+          <div className="panel">
+            <h2>Module results</h2>
+            {screening.moduleResults?.map((module) => (
+              <div className="module-status" key={module.module}>
+                <div>
+                  <div className="module-name">{module.module.replace(/_/g, ' ')}</div>
+                  {module.note && <div className="module-note">{module.note}</div>}
+                </div>
+                <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <ModuleStatus status={module.status} findings={module.flags?.length ?? 0} />
+                  <div className="module-note">{module.durationMillis} ms</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="panel">
+            <h2>Officer determination</h2>
+            {screening.officerDecision ? (
+              <p>
+                Recorded as <Badge value={screening.officerDecision} /> by{' '}
+                {screening.officerId || 'an unnamed officer'} on{' '}
+                {formatInstant(screening.decidedAt)}.
+                {screening.officerNotes && <> Note: {screening.officerNotes}</>}
+              </p>
+            ) : (
+              <p className="module-note">No officer decision recorded yet.</p>
+            )}
+
+            <label>
+              <span className="label-text">Officer</span>
+              <input type="text" value={officerId} onChange={(e) => setOfficerId(e.target.value)} />
+            </label>
+            <label>
+              <span className="label-text">Notes</span>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </label>
+            <div className="button-row">
+              <button disabled={saving} onClick={() => decide('CLEAR')}>
+                Clear
+              </button>
+              <button disabled={saving} onClick={() => decide('REVIEW')}>
+                Refer for review
+              </button>
+              <button className="danger" disabled={saving} onClick={() => decide('REJECT')}>
+                Reject
+              </button>
+            </div>
+            <div className="hint">
+              The system recommendation is never overwritten. Both views are kept, because a
+              disagreement between them is what a later review needs to see.
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="panel">
+            <h2>Findings ({screening.risk?.flags?.length ?? 0})</h2>
+            <FindingList flags={screening.risk?.flags} />
+          </div>
+
+          <div className="panel">
+            <h2>Evidence</h2>
+            {screening.documentImageId ? (
+              <img
+                className="evidence-image"
+                src={imageUrl(screening.caseReference, 'document')}
+                alt="Presented document"
+              />
+            ) : (
+              <div className="empty">No document image stored.</div>
+            )}
+
+            {screening.liveCaptureImageId && (
+              <>
+                <div className="label-text" style={{ marginTop: 16 }}>
+                  Live capture
+                </div>
+                <img
+                  className="evidence-image"
+                  src={imageUrl(screening.caseReference, 'live')}
+                  alt="Live capture"
+                />
+              </>
+            )}
+
+            {heatmap && (
+              <>
+                <div className="label-text" style={{ marginTop: 16 }}>
+                  Error level analysis
+                </div>
+                <img className="heatmap" src={heatmap} alt="Error level analysis heatmap" />
+                <div className="hint">
+                  Bright areas compress differently from their surroundings. A localised
+                  bright patch is where content was pasted in.
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="panel">
+            <h2>Investigation trail</h2>
+            {audit.length === 0 ? (
+              <div className="empty">No audit events recorded.</div>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Action</th>
+                    <th>Actor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {audit.map((event) => (
+                    <tr key={event.id}>
+                      <td className="mono">{formatInstant(event.occurredAt)}</td>
+                      <td>
+                        {event.action}
+                        {event.detail && <div className="module-note">{event.detail}</div>}
+                      </td>
+                      <td>{event.actor || '--'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+function Row({ label, value, mono }) {
+  return (
+    <tr>
+      <td>{label}</td>
+      <td className={mono ? 'mono' : undefined}>{value ?? '--'}</td>
+    </tr>
+  )
+}
+
+/**
+ * Whether a module ran, and what it found - deliberately two separate statements.
+ *
+ * Colouring "completed" green would tell an officer a module is fine when it may have
+ * just raised three findings. Ran-vs-not and clean-vs-findings are different questions
+ * and are never collapsed into one badge.
+ */
+function ModuleStatus({ status, findings }) {
+  if (status === 'FAILED') {
+    return <span className="badge badge-REJECT">failed</span>
+  }
+  if (status === 'SKIPPED') {
+    return <span className="badge badge-neutral">not run</span>
+  }
+  if (findings > 0) {
+    return (
+      <span className="badge badge-REVIEW">
+        {findings} finding{findings === 1 ? '' : 's'}
+      </span>
+    )
+  }
+  return <span className="badge badge-CLEAR">clean</span>
+}
+
+/** Pulls the ELA heatmap out of whichever finding carried it. */
+function findHeatmap(screening) {
+  const flags = screening.risk?.flags ?? []
+  for (const flag of flags) {
+    if (flag.evidence?.heatmap) {
+      return flag.evidence.heatmap
+    }
+  }
+  return null
+}
+
+function formatInstant(value) {
+  if (!value) return '--'
+  try {
+    return new Date(value).toLocaleString()
+  } catch {
+    return String(value)
+  }
+}
