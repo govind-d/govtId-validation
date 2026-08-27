@@ -19,6 +19,10 @@ With MongoDB running (`docker compose up -d mongo` from the repo root):
 
 Health at <http://localhost:8080/actuator/health>.
 
+Swagger UI at <http://localhost:8080/swagger-ui.html>, generated from the controllers, with
+the raw OpenAPI 3 document at <http://localhost:8080/v3/api-docs>. Uploads can be tried
+straight from the page — the multipart screening endpoint included.
+
 ## Tests
 
 ```bash

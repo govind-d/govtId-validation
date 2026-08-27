@@ -1,5 +1,6 @@
 package com.govid.screening.api;
 
+import com.govid.screening.api.dto.ApiError;
 import com.govid.screening.api.dto.WatchlistRequest;
 import com.govid.screening.domain.AuditEvent;
 import com.govid.screening.domain.Severity;
@@ -7,6 +8,13 @@ import com.govid.screening.domain.WatchlistEntry;
 import com.govid.screening.repository.AuditEventRepository;
 import com.govid.screening.repository.WatchlistRepository;
 import com.govid.screening.watchlist.WatchlistService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -25,6 +33,9 @@ import java.util.Map;
 /** Maintains the blacklist of stolen, revoked and flagged documents and identities. */
 @RestController
 @RequestMapping("/api/watchlist")
+@Tag(name = "Watchlist",
+        description = "Maintain the blacklist of stolen, revoked and flagged documents and "
+                + "identities that the cross-case stage screens against.")
 public class WatchlistController {
 
     private final WatchlistService watchlistService;
@@ -39,13 +50,29 @@ public class WatchlistController {
         this.auditRepository = auditRepository;
     }
 
+    @Operation(summary = "List watchlist entries, newest first",
+            description = "Includes deactivated entries; check the `active` field. `size` is "
+                    + "capped at 200.")
     @GetMapping
-    public Page<WatchlistEntry> list(@RequestParam(defaultValue = "0") int page,
-                                     @RequestParam(defaultValue = "50") int size) {
+    public Page<WatchlistEntry> list(
+            @Parameter(description = "Zero-based page index.")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Rows per page. Values above 200 are clamped.")
+            @RequestParam(defaultValue = "50") int size) {
         return watchlistRepository.findAllByOrderByAddedAtDesc(
                 PageRequest.of(page, Math.min(size, 200)));
     }
 
+    @Operation(summary = "Add a watchlist entry",
+            description = "Requires either a document number, or a surname together with a date "
+                    + "of birth. A name on its own is too common to match on safely.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The stored entry."),
+            @ApiResponse(responseCode = "400",
+                    description = "Neither a document number nor a surname with a date of birth "
+                            + "was supplied, or a field failed validation.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class)))})
     @PostMapping
     public WatchlistEntry add(@Valid @RequestBody WatchlistRequest request) {
         if (request.documentNumber() == null
@@ -82,9 +109,24 @@ public class WatchlistController {
      * <p>A watchlist is evidence. Removing a row outright would erase the record that a
      * document was ever flagged, and with it the reason any past case was rejected.
      */
+    @Operation(summary = "Deactivate a watchlist entry",
+            description = """
+                    Marks the entry inactive; it is never deleted.
+
+                    A watchlist is evidence. Removing a row outright would erase the record that \
+                    a document was ever flagged, and with it the reason any past case was \
+                    rejected.""")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The deactivated entry."),
+            @ApiResponse(responseCode = "400", description = "No such entry.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class)))})
     @DeleteMapping("/{id}")
-    public ResponseEntity<WatchlistEntry> deactivate(@PathVariable String id,
-                                                     @RequestParam(required = false) String actor) {
+    public ResponseEntity<WatchlistEntry> deactivate(
+            @Parameter(description = "Internal id of the entry.")
+            @PathVariable String id,
+            @Parameter(description = "Who deactivated it, recorded in the audit trail.")
+            @RequestParam(required = false) String actor) {
         WatchlistEntry entry = watchlistRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown watchlist entry " + id));
         entry.setActive(false);

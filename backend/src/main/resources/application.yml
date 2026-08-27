@@ -27,6 +27,21 @@ management:
     health:
       show-details: when-authorized
 
+springdoc:
+  api-docs:
+    # Machine-readable document. The Swagger UI page reads this same path.
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+    display-request-duration: true
+    # Collapsed on open: an officer console API is browsed by area, not read top to bottom.
+    doc-expansion: none
+  # Actuator is an operations surface, not part of the officer API contract.
+  show-actuator: false
+  default-produces-media-type: application/json
+
 screening:
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:5173}

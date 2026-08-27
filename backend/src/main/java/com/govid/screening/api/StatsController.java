@@ -3,6 +3,9 @@ package com.govid.screening.api;
 import com.govid.screening.domain.RiskFlag;
 import com.govid.screening.domain.ScreeningCase;
 import com.govid.screening.repository.ScreeningCaseRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -27,6 +30,9 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/stats")
+@Tag(name = "Statistics",
+        description = "Shift-level throughput, referral rate and the flag codes currently "
+                + "driving referrals.")
 public class StatsController {
 
     private final ScreeningCaseRepository caseRepository;
@@ -37,8 +43,18 @@ public class StatsController {
         this.clock = clock;
     }
 
+    @Operation(summary = "Checkpoint statistics over a rolling window",
+            description = """
+                    Counts by verdict and document type, the ten most frequent flag codes, \
+                    referral rate, and processing times.
+
+                    Processing time is reported as a median, not a mean: one pathological image \
+                    must not distort the number a supervisor uses to judge whether lanes are \
+                    keeping up.""")
     @GetMapping
-    public Map<String, Object> stats(@RequestParam(defaultValue = "24") int windowHours) {
+    public Map<String, Object> stats(
+            @Parameter(description = "Size of the window, in hours ending now. Minimum 1.")
+            @RequestParam(defaultValue = "24") int windowHours) {
         Instant since = Instant.now(clock).minus(Duration.ofHours(Math.max(1, windowHours)));
         List<ScreeningCase> recent = caseRepository.findByCreatedAtAfter(since);
 

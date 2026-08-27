@@ -118,6 +118,7 @@ that it did not run. Modules 2 and 3 are fully self-contained.
 | [docs/SPECIFICATION.md](docs/SPECIFICATION.md) | **What** the system must do: each module, the fields extracted, expected impact |
 | [docs/DESIGN.md](docs/DESIGN.md) | **How and why** it is built: design goals, component design, decisions and rejected alternatives |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Short orientation: components, request flow, extension points |
+| [docs/USER-JOURNEY.md](docs/USER-JOURNEY.md) | Onboarding walkthrough: what a user does, screen by screen, and the API behind each step |
 | [docs/DETECTION.md](docs/DETECTION.md) | How each forensic technique works, and what defeats it |
 | [docs/RISK-SCORING.md](docs/RISK-SCORING.md) | The scoring model and the full finding catalogue |
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | MongoDB collections and indexes |
