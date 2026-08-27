@@ -4,8 +4,10 @@ AI-Based Fake Identity & Document Screening System — a border-checkpoint platf
 reads identity and travel documents, checks them against issuing standards, looks for
 tampering, verifies the bearer, and returns a risk score with an auditable rationale.
 
-Full documentation is in [docs/](docs/); start with
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Full documentation is in [docs/](docs/). Start with
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a quick orientation, and read
+[docs/DESIGN.md](docs/DESIGN.md) before changing anything structural — it records the
+rejected alternatives, so you can tell a deliberate decision from an accident.
 
 ## Stack
 

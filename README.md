@@ -115,14 +115,19 @@ that it did not run. Modules 2 and 3 are fully self-contained.
 
 | Document | Contents |
 |---|---|
-| [docs/SPECIFICATION.md](docs/SPECIFICATION.md) | What each of the four modules must do, and the fields extracted |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, request flow, extension points |
+| [docs/SPECIFICATION.md](docs/SPECIFICATION.md) | **What** the system must do: each module, the fields extracted, expected impact |
+| [docs/DESIGN.md](docs/DESIGN.md) | **How and why** it is built: design goals, component design, decisions and rejected alternatives |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Short orientation: components, request flow, extension points |
 | [docs/DETECTION.md](docs/DETECTION.md) | How each forensic technique works, and what defeats it |
 | [docs/RISK-SCORING.md](docs/RISK-SCORING.md) | The scoring model and the full finding catalogue |
-| [docs/API.md](docs/API.md) | REST reference |
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | MongoDB collections and indexes |
+| [docs/API.md](docs/API.md) | REST reference and configuration |
+| [docs/TESTING.md](docs/TESTING.md) | Test strategy, what each suite guards, and the gaps |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Profiles, capability matrix, monitoring, production gates |
 | [docs/TASKS.md](docs/TASKS.md) | Delivered work and the remaining roadmap |
 | [CLAUDE.md](CLAUDE.md) | Conventions for anyone (or any agent) working in this repo |
+
+New to the repo? Read **SPECIFICATION** for the problem, then **DESIGN** for the reasoning.
 
 ---
 
