@@ -37,8 +37,11 @@ export default function ModuleTimeline({ results = [] }) {
                 {result.durationMillis != null && ` - ${result.durationMillis} ms`}
                 {count > 0 && ` - ${count} finding${count === 1 ? '' : 's'}`}
               </div>
-              {result.summary && result.status !== 'COMPLETED' && (
-                <div className="timeline-reason">{result.summary}</div>
+              {/* The API calls this `note`. On a skipped or failed module it carries the
+                  reason, which is the whole point of showing the module at all - without
+                  it the row says a check did not happen and refuses to say why. */}
+              {result.note && result.status !== 'COMPLETED' && (
+                <div className="timeline-reason">{result.note}</div>
               )}
             </div>
           </li>
