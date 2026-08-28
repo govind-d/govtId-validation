@@ -4,6 +4,7 @@ import { getAudit, getCase, imageUrl, recordDecision } from '../api.js'
 import VerdictBanner from '../components/VerdictBanner.jsx'
 import FindingList from '../components/FindingList.jsx'
 import Badge from '../components/Badge.jsx'
+import ModuleTimeline from '../components/ModuleTimeline.jsx'
 
 export default function CaseDetailPage() {
   const { reference } = useParams()
@@ -108,19 +109,8 @@ export default function CaseDetailPage() {
           </div>
 
           <div className="panel">
-            <h2>Module results</h2>
-            {screening.moduleResults?.map((module) => (
-              <div className="module-status" key={module.module}>
-                <div>
-                  <div className="module-name">{module.module.replace(/_/g, ' ')}</div>
-                  {module.note && <div className="module-note">{module.note}</div>}
-                </div>
-                <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  <ModuleStatus status={module.status} findings={module.flags?.length ?? 0} />
-                  <div className="module-note">{module.durationMillis} ms</div>
-                </div>
-              </div>
-            ))}
+            <h2>What ran</h2>
+            <ModuleTimeline results={screening.moduleResults} />
           </div>
 
           <div className="panel">
@@ -248,30 +238,6 @@ function Row({ label, value, mono }) {
       <td className={mono ? 'mono' : undefined}>{value ?? '--'}</td>
     </tr>
   )
-}
-
-/**
- * Whether a module ran, and what it found - deliberately two separate statements.
- *
- * Colouring "completed" green would tell an officer a module is fine when it may have
- * just raised three findings. Ran-vs-not and clean-vs-findings are different questions
- * and are never collapsed into one badge.
- */
-function ModuleStatus({ status, findings }) {
-  if (status === 'FAILED') {
-    return <span className="badge badge-REJECT">failed</span>
-  }
-  if (status === 'SKIPPED') {
-    return <span className="badge badge-neutral">not run</span>
-  }
-  if (findings > 0) {
-    return (
-      <span className="badge badge-REVIEW">
-        {findings} finding{findings === 1 ? '' : 's'}
-      </span>
-    )
-  }
-  return <span className="badge badge-CLEAR">clean</span>
 }
 
 /** Pulls the ELA heatmap out of whichever finding carried it. */
