@@ -1,10 +1,25 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { getAudit, getCase, imageUrl, recordDecision } from '../api.js'
 import VerdictBanner from '../components/VerdictBanner.jsx'
 import FindingList from '../components/FindingList.jsx'
 import Badge from '../components/Badge.jsx'
 import ModuleTimeline from '../components/ModuleTimeline.jsx'
+
+const VISA_FIELDS = [
+  'visaNumber',
+  'visaType',
+  'entryType',
+  'stayDurationDays',
+  'validFrom',
+  'validUntil',
+]
+
+const DECISIONS = [
+  { value: 'CLEAR', label: 'Clear' },
+  { value: 'REVIEW', label: 'Refer for review' },
+  { value: 'REJECT', label: 'Reject', className: 'danger' },
+]
 
 export default function CaseDetailPage() {
   const { reference } = useParams()
@@ -53,24 +68,53 @@ export default function CaseDetailPage() {
     }
   }
 
-  if (loading) return <div className="panel spinner">Loading case...</div>
-  if (error && !screening) return <div className="error">{error}</div>
+  if (loading) return <CaseSkeleton />
+
+  if (error && !screening) {
+    return (
+      <>
+        <div className="error" role="alert">
+          {error}
+        </div>
+        <div className="panel placeholder">
+          <h3>Case {reference} could not be loaded</h3>
+          <p>
+            The reference may be wrong, or the service is unreachable. Nothing has been
+            changed on the case either way.
+          </p>
+          <Link to="/cases">Back to all cases &rarr;</Link>
+        </div>
+      </>
+    )
+  }
+
   if (!screening) return null
 
   const extracted = screening.extracted
   const heatmap = findHeatmap(screening)
+  const flagCount = screening.risk?.flags?.length ?? 0
+  const hasVisaTerms = VISA_FIELDS.some((field) => extracted?.[field] != null)
 
   return (
     <>
-      <h1 className="page-title">Case {screening.caseReference}</h1>
-      <p className="page-subtitle">
-        {screening.documentType?.replace(/_/g, ' ')} presented at{' '}
-        {screening.checkpointId || 'an unrecorded checkpoint'}
-        {screening.laneId ? `, lane ${screening.laneId}` : ''} - screened in{' '}
-        {screening.processingMillis} ms
-      </p>
+      <header className="page-head">
+        <div>
+          <h1 className="page-title">Case {screening.caseReference}</h1>
+          <p className="page-subtitle">
+            {screening.documentType?.replace(/_/g, ' ')} presented at{' '}
+            {screening.checkpointId || 'an unrecorded checkpoint'}
+            {screening.laneId ? `, lane ${screening.laneId}` : ''} - screened in{' '}
+            {screening.processingMillis} ms
+          </p>
+        </div>
+        <span className="result-count">{formatInstant(screening.createdAt)}</span>
+      </header>
 
-      {error && <div className="error">{error}</div>}
+      {error && (
+        <div className="error" role="alert">
+          {error}
+        </div>
+      )}
 
       <VerdictBanner risk={screening.risk} />
 
@@ -88,12 +132,19 @@ export default function CaseDetailPage() {
                 <Row label="Date of birth" value={extracted?.dateOfBirth} />
                 <Row label="Sex" value={extracted?.sex} />
                 <Row label="Date of expiry" value={extracted?.dateOfExpiry} />
-                <Row label="Visa number" value={extracted?.visaNumber} mono />
-                <Row label="Visa type" value={extracted?.visaType} />
-                <Row label="Entry type" value={extracted?.entryType} />
-                <Row label="Permitted stay (days)" value={extracted?.stayDurationDays} />
-                <Row label="Valid from" value={extracted?.validFrom} />
-                <Row label="Valid until" value={extracted?.validUntil} />
+                {/* Only for documents that carry visa terms. On a passport these fields are
+                    not missing, they do not exist - and "not read" would wrongly suggest
+                    the reader failed at something. */}
+                {hasVisaTerms && (
+                  <>
+                    <Row label="Visa number" value={extracted?.visaNumber} mono />
+                    <Row label="Visa type" value={extracted?.visaType} />
+                    <Row label="Entry type" value={extracted?.entryType} />
+                    <Row label="Permitted stay (days)" value={extracted?.stayDurationDays} />
+                    <Row label="Valid from" value={extracted?.validFrom} />
+                    <Row label="Valid until" value={extracted?.validUntil} />
+                  </>
+                )}
                 <Row label="MRZ format" value={extracted?.mrz?.format} />
                 <Row label="Read by" value={extracted?.engine} />
                 <Row
@@ -126,24 +177,42 @@ export default function CaseDetailPage() {
               <p className="module-note">No officer decision recorded yet.</p>
             )}
 
-            <label>
-              <span className="label-text">Officer</span>
-              <input type="text" value={officerId} onChange={(e) => setOfficerId(e.target.value)} />
-            </label>
-            <label>
-              <span className="label-text">Notes</span>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
-            </label>
-            <div className="button-row">
-              <button disabled={saving} onClick={() => decide('CLEAR')}>
-                Clear
-              </button>
-              <button disabled={saving} onClick={() => decide('REVIEW')}>
-                Refer for review
-              </button>
-              <button className="danger" disabled={saving} onClick={() => decide('REJECT')}>
-                Reject
-              </button>
+            <div className="field">
+              <label className="label-text" htmlFor="officer">
+                Officer
+              </label>
+              <input
+                id="officer"
+                type="text"
+                placeholder="off-114"
+                value={officerId}
+                onChange={(e) => setOfficerId(e.target.value)}
+              />
+            </div>
+
+            <div className="field">
+              <label className="label-text" htmlFor="officer-notes">
+                Notes
+              </label>
+              <textarea
+                id="officer-notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="What you checked, and what settled it."
+              />
+            </div>
+
+            <div className="button-row form-actions">
+              {DECISIONS.map((option) => (
+                <button
+                  key={option.value}
+                  className={option.className}
+                  disabled={saving}
+                  onClick={() => decide(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
             <div className="hint">
               The system recommendation is never overwritten. Both views are kept, because a
@@ -154,7 +223,10 @@ export default function CaseDetailPage() {
 
         <div>
           <div className="panel">
-            <h2>Findings ({screening.risk?.flags?.length ?? 0})</h2>
+            <div className="panel-head">
+              <h2>Findings</h2>
+              {flagCount > 0 && <span className="count-pill">{flagCount}</span>}
+            </div>
             <FindingList flags={screening.risk?.flags} />
           </div>
 
@@ -198,33 +270,66 @@ export default function CaseDetailPage() {
           </div>
 
           <div className="panel">
-            <h2>Investigation trail</h2>
+            <div className="panel-head">
+              <h2>Investigation trail</h2>
+              {audit.length > 0 && <span className="count-pill">{audit.length}</span>}
+            </div>
             {audit.length === 0 ? (
               <div className="empty">No audit events recorded.</div>
             ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>Action</th>
-                    <th>Actor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {audit.map((event) => (
-                    <tr key={event.id}>
-                      <td className="mono">{formatInstant(event.occurredAt)}</td>
-                      <td>
-                        {event.action}
-                        {event.detail && <div className="module-note">{event.detail}</div>}
-                      </td>
-                      <td>{event.actor || '--'}</td>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Action</th>
+                      <th>Actor</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {audit.map((event) => (
+                      <tr key={event.id}>
+                        <td className="mono">{formatInstant(event.occurredAt)}</td>
+                        <td>
+                          {event.action}
+                          {event.detail && <div className="module-note">{event.detail}</div>}
+                        </td>
+                        <td>{event.actor || <span className="unset">--</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/**
+ * Mirrors the shape of the loaded page rather than showing a centred spinner, so the
+ * layout does not jump under the officer's cursor when the case arrives.
+ */
+function CaseSkeleton() {
+  return (
+    <>
+      <div className="skeleton" style={{ height: 22, width: '38%' }} />
+      <div className="skeleton" style={{ height: 14, width: '62%', marginBottom: 26 }} />
+      <div className="panel">
+        <div className="skeleton" style={{ height: 60, marginBottom: 0 }} />
+      </div>
+      <div className="grid-2">
+        <div className="panel">
+          {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+            <div className="skeleton" key={i} style={{ height: 16 }} />
+          ))}
+        </div>
+        <div className="panel">
+          {[0, 1, 2, 3].map((i) => (
+            <div className="skeleton" key={i} style={{ height: 30 }} />
+          ))}
         </div>
       </div>
     </>
@@ -235,7 +340,9 @@ function Row({ label, value, mono }) {
   return (
     <tr>
       <td>{label}</td>
-      <td className={mono ? 'mono' : undefined}>{value ?? '--'}</td>
+      <td className={mono ? 'mono' : undefined}>
+        {value ?? <span className="unset">not read</span>}
+      </td>
     </tr>
   )
 }

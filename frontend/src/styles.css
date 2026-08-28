@@ -582,6 +582,11 @@ button.danger:hover:not(:disabled) {
   color: var(--reject);
 }
 
+/* Inside a form it sits between field groups rather than under a single control. */
+form .quality {
+  margin-bottom: 18px;
+}
+
 /* ---------- Verdict ---------- */
 
 .verdict-banner {
@@ -957,18 +962,13 @@ button.danger:hover:not(:disabled) {
   color: var(--reject);
 }
 
-/* Kept for the case detail page's flat module rows. */
-.module-status {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-3);
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
+/* Watchlist entries are deactivated rather than deleted, so both states are on screen. */
+.status-pill.status-active {
+  color: var(--clear);
 }
 
-.module-status:last-child {
-  border-bottom: none;
+.status-pill.status-inactive {
+  color: var(--faint);
 }
 
 /* ---------- Detail grid ---------- */
