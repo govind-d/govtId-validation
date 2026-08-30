@@ -54,8 +54,19 @@ public class OcrService {
     public OcrOutcome extract(OcrEngine.OcrRequest request) {
         long start = System.nanoTime();
 
+        // Turn the photograph the way its EXIF says it should be viewed, before any engine
+        // sees it. A sideways page does not read badly, it reads as noise, and the module
+        // would then report every field missing on a document that was never in question.
+        // Only the copy passed to the engines is turned; the stored evidence is untouched.
+        ExifOrientation.Result oriented = ExifOrientation.upright(request.image());
+        if (oriented.applied()) {
+            request = new OcrEngine.OcrRequest(oriented.image(), request.contentType(),
+                    request.declaredType(), request.suppliedText());
+        }
+        final OcrEngine.OcrRequest engineRequest = request;
+
         List<OcrEngine> candidates = engines.stream()
-                .filter(engine -> engine.isAvailable(request))
+                .filter(engine -> engine.isAvailable(engineRequest))
                 .toList();
 
         if (candidates.isEmpty()) {
@@ -77,7 +88,7 @@ public class OcrService {
 
         for (OcrEngine candidate : candidates) {
             try {
-                output = candidate.read(request);
+                output = candidate.read(engineRequest);
                 engine = candidate;
                 break;
             } catch (Exception e) {
@@ -103,6 +114,8 @@ public class OcrService {
         Map<String, Object> details = new LinkedHashMap<>(output.details());
         details.put("engine", engine.name());
         details.put("confidence", output.confidence());
+        details.put("exifOrientation", oriented.orientation());
+        details.put("exifOrientationApplied", oriented.applied());
         if (!attempts.isEmpty()) {
             // Recorded as a diagnostic, never as a risk flag. A failing engine is our
             // infrastructure problem; it must not raise the score against the traveller.
@@ -125,7 +138,7 @@ public class OcrService {
             details.put("mrzFormat", mrz.get().mrz().format());
         } else {
             details.put("mrzFormat", null);
-            Severity severity = MRZ_MANDATORY.contains(request.declaredType())
+            Severity severity = MRZ_MANDATORY.contains(engineRequest.declaredType())
                     ? Severity.HIGH
                     : Severity.LOW;
             flags.add(RiskFlag.of("MRZ_NOT_FOUND", ScreeningModule.OCR_EXTRACTION, severity,
@@ -133,7 +146,7 @@ public class OcrService {
                             + (severity == Severity.HIGH
                             ? " A document of this type is required to carry one."
                             : ""),
-                    Map.of("declaredType", String.valueOf(request.declaredType()))));
+                    Map.of("declaredType", String.valueOf(engineRequest.declaredType()))));
         }
 
         LabelledFieldExtractor.enrich(fields, output.rawText());
