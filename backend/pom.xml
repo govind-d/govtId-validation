@@ -47,6 +47,19 @@
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
+    <!--
+      Reports configuration keys that moved or were removed in a Spring Boot upgrade.
+      An unknown key is ignored silently, so a renamed property fails invisibly: the
+      Boot 4 move of the Mongo connection keys from `spring.data.mongodb` to
+      `spring.mongodb` silently sent every write to the driver's default `test`
+      database. This logs those at startup instead. Remove once the upgrade settles.
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-properties-migrator</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
     <!-- OpenAPI 3 description of the officer API, plus the Swagger UI that renders it. -->
     <dependency>
       <groupId>org.springdoc</groupId>

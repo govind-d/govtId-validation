@@ -1,9 +1,15 @@
 spring:
   application:
     name: govtid-screening
+  mongodb:
+    # Connection settings live under `spring.mongodb` since Spring Boot 4.0. The old
+    # `spring.data.mongodb` connection keys are removed, and an unknown key is ignored
+    # silently rather than failing, so leaving them here loses the database name and
+    # writes everything to the driver default `test`.
+    uri: ${MONGODB_URI:mongodb://localhost:27017/govtid_screening}
   data:
     mongodb:
-      uri: ${MONGODB_URI:mongodb://localhost:27017/govtid_screening}
+      # Mapping-side setting; this one is still a `spring.data.mongodb` key.
       auto-index-creation: true
   servlet:
     multipart:
